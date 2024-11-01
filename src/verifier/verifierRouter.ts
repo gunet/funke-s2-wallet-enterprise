@@ -113,7 +113,7 @@ verifierRouter.post('/callback', async (req, res) => {
 		console.log("Credential issuer metadata = ", credentialIssuerMetadata.data)
 		const fistImageUri = Object.values(credentialIssuerMetadata.data.credential_configurations_supported).map((conf: any) => {
 			if (conf?.vct == parsedCredential?.vct) {
-				return conf?.display[0] ? conf?.display[0]?.background_image?.uri : undefined;
+				return conf?.display && conf?.display[0] && conf?.display[0]?.background_image?.uri ? conf?.display[0]?.background_image?.uri : undefined;
 			}
 			return undefined;
 		}).filter((val) => val)[0];
@@ -131,9 +131,11 @@ verifierRouter.post('/callback', async (req, res) => {
 		else if (fistImageUri) {
 			credentialImages.push(fistImageUri);
 		}
+		else if (["https://example.bmi.bund.de/credential/pid/1.0", "urn:eu.europa.ec.eudi:pid:1"].includes(parsedCredential.vct as string)) {
+			credentialImages.push(config.url + "/images/card.png");
+		}
 		else {
-			console.error("Not supported format. Parsing failed")
-			return res.status(400).send({ error: "Not supoorted format" })	
+			credentialImages.push(fistImageUri);
 		}
 	}
 	else {
