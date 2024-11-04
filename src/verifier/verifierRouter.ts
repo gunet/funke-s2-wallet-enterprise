@@ -20,7 +20,8 @@ import base64url from "base64url";
 import { generateDataUriFromSvg } from "../lib/generateDataUriFromSvg";
 import { generateRandomIdentifier } from "../lib/generateRandomIdentifier";
 import { addSessionIdCookieToResponse } from "../sessionIdCookieConfig";
-
+import * as jose from 'jose';
+import { DeviceSignedDocument, parse } from "@auth0/mdl";
 
 export enum CredentialFormat {
 	VC_SD_JWT = "vc+sd-jwt",
@@ -92,7 +93,7 @@ verifierRouter.post('/callback', async (req, res) => {
 		})
 	}
 	
-	const { vp_token, claims, date_created } = result.rpState;
+	const { vp_token, claims, date_created, presentation_definition } = result.rpState;
 	const status = result.status;
 
 	const credentialImages = [];
@@ -139,11 +140,14 @@ verifierRouter.post('/callback', async (req, res) => {
 		}
 	}
 
-	try { // try parsing as md
-
-	}
-	catch(err) {
-
+	if (presentation_definition.input_descriptors.length == 1 && "mso_mdoc" in presentation_definition.input_descriptors[0].format) {
+		const encoded = jose.base64url.decode(vp_token)
+		const mdoc = parse(encoded);
+		const [document] = mdoc.documents as DeviceSignedDocument[];
+		const ns = document.issuerSignedNameSpaces[0];
+		const attrValues = document.getIssuerNameSpace(ns);
+		credentialPayloads.push(attrValues);
+		credentialImages.push(config.url + "/images/card.png");
 	}
 	return res.render('verifier/success.pug', {
 		lang: req.lang,
