@@ -17,6 +17,10 @@ import path from "path";
 import crypto from 'node:crypto';
 import { ClaimRecord, PresentationClaims, RelyingPartyState } from "../entities/RelyingPartyState.entity";
 import { generateRandomIdentifier } from "../lib/generateRandomIdentifier";
+import { DataItem, DeviceSignedDocument, parse } from "@auth0/mdl";
+import * as mdl from '@auth0/mdl';
+import * as jose from 'jose';
+import { cborEncode } from "../util/cbor";
 
 const privateKeyPem = fs.readFileSync(path.join(__dirname, "../../../keys/pem.server.key"), 'utf-8').toString();
 const x5c = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../keys/x5c.server.json")).toString()) as Array<string>;
@@ -107,6 +111,7 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 
 		exportedEphPub.kid = generateRandomIdentifier(8);
 		exportedEphPriv.kid = exportedEphPub.kid;
+		exportedEphPriv.use = 'enc';
 
 		const signedRequestObject = await new SignJWT({
 			response_uri: responseUri,
@@ -191,84 +196,94 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 	async responseHandler(ctx: { req: Request, res: Response }): Promise<void> {
 		// let presentationSubmissionObject: PresentationSubmission | null = qs.parse(decodeURI(presentation_submission)) as any;
 
-		let vp_token = ctx.req.body?.vp_token;
-		let state = ctx.req.body?.state;
-		let presentation_submission = ctx.req.body.presentation_submission ? JSON.parse(decodeURI(ctx.req.body.presentation_submission)) as any : null;
-
-
-		if (ctx.req.body.response) { // E2EE - JARM
-			const { kid } = JSON.parse(base64url.decode(ctx.req.body.response.split('.')[0])) as { kid: string | undefined };
-			if (!kid) {
-				throw new Error("Couldnt extract kid");
+		try {
+			let vp_token = ctx.req.body?.vp_token;
+			let state = ctx.req.body?.state;
+			let presentation_submission = ctx.req.body.presentation_submission ? JSON.parse(decodeURI(ctx.req.body.presentation_submission)) as any : null;
+	
+	
+			if (ctx.req.body.response) { // E2EE - JARM
+				const { kid } = JSON.parse(base64url.decode(ctx.req.body.response.split('.')[0])) as { kid: string | undefined };
+				if (!kid) {
+					throw new Error("Couldnt extract kid");
+				}
+				// get rpstate only to get the private key to decrypt the response
+				let rpState = await this.rpStateRepository.createQueryBuilder()
+					.where("rp_eph_kid = :rp_eph_kid", { rp_eph_kid: kid })
+					.getOne();
+				if (!rpState) {
+					throw new Error();
+				}
+				const rp_eph_priv = await importJWK(rpState.rp_eph_priv, 'ECDH-ES');
+				const { protectedHeader, plaintext } = await compactDecrypt(ctx.req.body.response, rp_eph_priv);
+				const payload = JSON.parse(new TextDecoder().decode(plaintext)) as { state: string | undefined, vp_token: string | undefined, presentation_submission: any };
+				if (!payload?.state) {
+					throw new Error("Missing state");
+				}
+	
+				// get rpState using the state value
+				rpState = await this.rpStateRepository.createQueryBuilder()
+					.where("state = :state", { state: payload.state })
+					.getOne();
+	
+				if (!rpState) {
+					throw new Error("Couldn't get rp state with state");
+				}
+	
+				if (!payload.vp_token) {
+					throw new Error("Encrypted Response: vp_token is missing");
+				}
+	
+				if (!payload.presentation_submission) {
+					throw new Error("Encrypted Response: presentation_submission is missing");
+				}
+				rpState.response_code = generateRandomIdentifier(8);
+				rpState.encrypted_response = ctx.req.body.response;
+				rpState.presentation_submission = payload.presentation_submission;
+				rpState.vp_token = payload.vp_token;
+				rpState.date_created = new Date();
+				rpState.apv_jarm_encrypted_response_header = protectedHeader.apv && typeof protectedHeader.apv == 'string' ? protectedHeader.apv as string : null;
+				rpState.apu_jarm_encrypted_response_header = protectedHeader.apu && typeof protectedHeader.apu == 'string' ? protectedHeader.apu as string : null;
+				console.log("Stored rp state = ", rpState)
+				await this.rpStateRepository.save(rpState);
+				ctx.res.send({ redirect_uri: rpState.callback_endpoint + '#response_code=' + rpState.response_code })
+				return;
 			}
-			// get rpstate only to get the private key to decrypt the response
-			let rpState = await this.rpStateRepository.createQueryBuilder()
-				.where("rp_eph_kid = :rp_eph_kid", { rp_eph_kid: kid })
-				.getOne();
-			if (!rpState) {
-				throw new Error();
+	
+			if (!state) {
+				console.log("Missing state param");
+				ctx.res.status(401).send({ error: "Missing state param" });
+				return;
 			}
-			const rp_eph_priv = await importJWK(rpState.rp_eph_priv, 'ECDH-ES');
-			const { plaintext } = await compactDecrypt(ctx.req.body.response, rp_eph_priv);
-			const payload = JSON.parse(new TextDecoder().decode(plaintext)) as { state: string | undefined, vp_token: string | undefined, presentation_submission: any };
-			if (!payload?.state) {
-				throw new Error("Missing state");
+	
+			if (!vp_token) {
+				console.log("Missing state param")
+				ctx.res.status(401).send({ error: "Missing state param" });
+				return;
 			}
-
+	
 			// get rpState using the state value
-			rpState = await this.rpStateRepository.createQueryBuilder()
-				.where("state = :state", { state: payload.state })
+			const rpState = await this.rpStateRepository.createQueryBuilder()
+				.where("state = :state", { state: state })
 				.getOne();
-
+	
 			if (!rpState) {
 				throw new Error("Couldn't get rp state with state");
 			}
-
-			if (!payload.vp_token) {
-				throw new Error("Encrypted Response: vp_token is missing");
-			}
-
-			if (!payload.presentation_submission) {
-				throw new Error("Encrypted Response: presentation_submission is missing");
-			}
 			rpState.response_code = generateRandomIdentifier(8);
-			rpState.encrypted_response = ctx.req.body.response;
-			rpState.presentation_submission = payload.presentation_submission;
-			rpState.vp_token = payload.vp_token;
+			rpState.presentation_submission = presentation_submission;
+			rpState.vp_token = vp_token;
 			rpState.date_created = new Date();
-			console.log("Stored rp state = ", rpState)
 			await this.rpStateRepository.save(rpState);
 			ctx.res.send({ redirect_uri: rpState.callback_endpoint + '#response_code=' + rpState.response_code })
 			return;
 		}
-
-		if (!state) {
-			console.log("Missing state param");
-			ctx.res.status(401).send({ error: "Missing state param" });
+		catch(err) {
+			console.error(err);
+			ctx.res.send({ error: "Failed to handle authorization response" });
 			return;
 		}
 
-		if (!vp_token) {
-			console.log("Missing state param")
-			ctx.res.status(401).send({ error: "Missing state param" });
-			return;
-		}
-
-		// get rpState using the state value
-		const rpState = await this.rpStateRepository.createQueryBuilder()
-			.where("state = :state", { state: state })
-			.getOne();
-
-		if (!rpState) {
-			throw new Error("Couldn't get rp state with state");
-		}
-		rpState.response_code = generateRandomIdentifier(8);
-		rpState.presentation_submission = presentation_submission;
-		rpState.vp_token = vp_token;
-		rpState.date_created = new Date();
-		await this.rpStateRepository.save(rpState);
-		ctx.res.send({ redirect_uri: rpState.callback_endpoint + '#response_code=' + rpState.response_code })
-		return;
 	}
 
 	private async validateVpToken(vp_token: string, presentation_submission: any, rpState: RelyingPartyState): Promise<{ presentationClaims?: PresentationClaims, error?: Error, error_description?: Error }> {
@@ -362,6 +377,69 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 					return { error: new Error("SD_JWT_VERIFICATION_FAILURE"), error_description: new Error(`Verification result ${JSON.stringify(verificationResult)}`) };
 				}
 			}
+			else if (desc.format == VerifiableCredentialFormat.MSO_MDOC) {
+				const responseUri = this.configurationService.getConfiguration().redirect_uri;
+				const client_id = rpState.audience;
+				const definition = this.configurationService.getPresentationDefinitions().filter((pd) => pd.id == presentation_submission.definition_id)[0]
+				console.log("Credential to be mdoc parsed = ", vp_token)
+				const b = Buffer.from(vp_token, 'base64url');
+				console.log("Convert to hex = ", Buffer.from(b).toString('hex'));
+				const parsed = parse(b);
+				const ns = parsed.documents[0].getIssuerNameSpace(parsed.documents[0].issuerSignedNameSpaces[0]);
+				const json: any = {};
+				json[parsed.documents[0].docType] = ns;
+
+				const [document] = parsed.documents as DeviceSignedDocument[];
+				console.log("Dev sig = ", document.deviceSigned.deviceAuth.deviceSignature)
+				
+				if (!rpState.apu_jarm_encrypted_response_header) {
+					throw new Error("Not rpState.apu_jarm_encrypted_response_header is missing");
+				}
+				if (!rpState.apv_jarm_encrypted_response_header) {
+					throw new Error("Not rpState.apv_jarm_encrypted_response_header is missing");
+				}
+
+				const verifier = new mdl.Verifier(config.trustedRootCertificates);
+
+				const getSessionTranscriptBytes = (clId: string, respUri: string, nonce: string, mdocNonce: string) => cborEncode(
+					DataItem.fromData([
+						null, // DeviceEngagementBytes
+						null, // EReaderKeyBytes
+						[mdocNonce, clId, respUri, nonce], // Handover = OID4VPHandover
+					]),
+				);
+
+				const verifierNonce = base64url.decode(rpState.apv_jarm_encrypted_response_header);
+				console.log("verifierNonce = ", verifierNonce);
+				const receivedMdocNonce = base64url.decode(rpState.apu_jarm_encrypted_response_header);
+				console.log("Received mdoc nonce = ", receivedMdocNonce);
+
+				const encoded = jose.base64url.decode(vp_token);
+				const result = await verifier.verify(encoded, {
+					encodedSessionTranscript: getSessionTranscriptBytes(client_id, responseUri, verifierNonce, receivedMdocNonce),
+				}).then((success) => ({ success })).catch((err) => ({ err }));
+
+				if ('err' in result) {
+					const { err } = result;
+					console.log("Failed to verify the mdoc credential. Cause: ");
+					console.log(err);
+					return { error: new Error("PRESENTATION_RESPONSE:MDOC_VERIFICATION_FAILED"), error_description: new Error("Failed to verify the mdoc credential") };
+				}
+				const fieldNamesWithValues = definition.input_descriptors[0].constraints.fields.map((field: any) => {
+					const values = field.path.map((possiblePath: string) => JSONPath({ path: possiblePath, json: json })[0]);
+					const val = values.filter((v: any) => v != undefined || v != null)[0]; // get first value that is not undefined
+					return val ? { name: (field as any).name as string, value: typeof val == 'object' ? JSON.stringify(val) : val as string } : undefined;
+				});
+
+				if (fieldNamesWithValues.includes(undefined)) {
+					return { error: new Error("INSUFFICIENT_CREDENTIALS"), error_description: new Error("Insufficient credentials") };
+				}
+
+				for (const { name, value } of fieldNamesWithValues as { name: string, value: string }[]) {
+					presentationClaims[desc.id].push({ name, value });
+				}
+
+			}
 		}
 
 		return { presentationClaims };
@@ -369,7 +447,7 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 
 
 	public async getPresentationBySessionId(ctx: { req: Request, res: Response }): Promise<{ status: true, rpState: RelyingPartyState } | { status: false }> {
-		
+
 		if (!ctx.req.cookies['session_id']) {
 			console.error("Missing session id");
 			return { status: false };
@@ -385,7 +463,7 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 
 		if (!rpState.presentation_submission) {
 			console.error("Presentation has not been sent. session_id " + ctx.req.cookies['session_id']);
-			return { status: false };	
+			return { status: false };
 		}
 
 		console.log("RP state = ", rpState)
@@ -411,14 +489,14 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 					if (aud != rpState.audience) {
 						throw new Error("Wrong aud");
 					}
-	
+
 					if (nonce != rpState.nonce) {
 						throw new Error("Wrong nonce");
 					}
 					return { sdJwt };
 				})();
 			}
-			catch(err) {
+			catch (err) {
 				console.error(err);
 				return { status: false };
 			}
