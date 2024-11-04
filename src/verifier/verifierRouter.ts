@@ -135,14 +135,16 @@ verifierRouter.post('/callback', async (req, res) => {
 			credentialImages.push(config.url + "/images/card.png");
 		}
 		else {
-			credentialImages.push(fistImageUri);
+			credentialImages.push(config.url + "/images/card.png");
 		}
 	}
-	else {
-		console.error("Not supported format. Parsing failed")
-		return res.status(400).send({ error: "Not supoorted format" })
-	}
 
+	try { // try parsing as md
+
+	}
+	catch(err) {
+
+	}
 	return res.render('verifier/success.pug', {
 		lang: req.lang,
 		locale: locale[req.lang],
