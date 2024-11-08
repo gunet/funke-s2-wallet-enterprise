@@ -160,8 +160,8 @@ export class AuthorizationServerState {
 	@Column({ name: "given_name", type: "varchar", nullable: true })
 	given_name?: string;
 
-	@Column({ name: "birth_date", type: "varchar", nullable: true })
-	birth_date?: string;
+	@Column({ name: "birthdate", type: "varchar", nullable: true })
+	birthdate?: string;
 
 
 	@Column({ name: "document_number", type: "varchar", nullable: true })
