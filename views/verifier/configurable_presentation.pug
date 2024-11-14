@@ -1,0 +1,35 @@
+extends ../layout.pug
+block layout-content
+	.container
+		.centered-layout
+			form(action=`/verifier/public/definitions/presentation-request/${presentationDefinitionId}` method='POST')
+				.CenteredLayout
+					h2 Select the fields you wish to present
+					.left-layout
+						.field
+							label(for="purpose") Purpose
+							textarea#purpose(name="purpose")
+
+						.field
+							label Type
+							select#type(name="type")
+								option(value="sd-jwt") SD-JWT
+								option(value="mdoc") MDOC
+					.attribute-selection
+						label(for="attribute") Attribute
+						select(name="attribute" id="attribute")
+							option(value="") Select an attribute
+							for field in selectableFields
+								option(value=field[1]) #{field[0]} - #{field[1]}
+						.add-button
+							button(type="button" onclick="addAttributeField()") Add Attribute
+
+					// Container to show selected attributes
+					.selected-attributes(id="selectedAttributes")
+
+					button(type="submit") Request
+
+	link(rel="stylesheet" href="/styles/scan-qr-verifier.css")
+	link(rel="stylesheet" href="/styles/configurable-presentation.css")
+	script(src="/js/index.js")
+	script(src="/js/configurable-presentation.js")

@@ -440,15 +440,16 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 					const val = values.filter((v: any) => v != undefined || v != null)[0]; // get first value that is not undefined
 					return val ? { name: (field as any).name as string, value: typeof val == 'object' ? JSON.stringify(val) : val as string } : undefined;
 				});
+				// if (fieldNamesWithValues.includes(undefined)) {
+				// 	return { error: new Error("INSUFFICIENT_CREDENTIALS"), error_description: new Error("Insufficient credentials") };
+				// }
 
-				if (fieldNamesWithValues.includes(undefined)) {
-					return { error: new Error("INSUFFICIENT_CREDENTIALS"), error_description: new Error("Insufficient credentials") };
+				for (const item of fieldNamesWithValues as Array<{ name: string; value: string } | undefined>) {
+					if (item) { // Check if item is not undefined
+						const { name, value } = item;
+						presentationClaims[desc.id].push({ name, value });
+					}
 				}
-
-				for (const { name, value } of fieldNamesWithValues as { name: string, value: string }[]) {
-					presentationClaims[desc.id].push({ name, value });
-				}
-
 			}
 		}
 
