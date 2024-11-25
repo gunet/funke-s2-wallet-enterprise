@@ -16,6 +16,7 @@
   "author": "",
   "description": "",
   "dependencies": {
+    "@auth0/mdl": "^1.5.1",
     "@digitalbazaar/did-io": "^2.0.0",
     "@digitalbazaar/did-method-key": "^5.1.0",
     "@sd-jwt/core": "^0.2.1",
@@ -24,6 +25,7 @@
     "axios": "^0.27.2",
     "base64url": "^3.0.1",
     "body-parser": "^1.20.0",
+    "cbor-x": "^1.6.0",
     "client-oauth2": "^4.3.3",
     "connect-redis": "^7.0.1",
     "cookie-parser": "^1.4.6",
