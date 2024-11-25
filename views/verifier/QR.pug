@@ -12,7 +12,13 @@ block layout-content
 					
           - const modifiedURL = authorizationRequestURL.replace("openid4vp://cb", wwwalletURL)
           button.Btn.Medium.openwithwalletbutton(type="button" onclick=`window.location.href = '${modifiedURL}';`) Open with wwWallet
-          button.Btn.Medium.openwithwalletbuttonnative(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with a Native
+          button.Btn.Medium.openwithwalletbuttonnative(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with a Native Wallet
+
+           // input and button for custom wallet
+          .custom-wallet-input
+            label(for="customWalletURL") Test with other wallet:
+            input(type="text" id="customWalletURL" name="customWalletURL" placeholder="Enter custom wallet URL")
+            button.Btn.Medium(type="button" onclick="testWithCustomWallet()") Test
 
           input(type='hidden' name='state' id='state' value=state)
           input(type='hidden' name='authorizationRequestQR' id='authorizationRequestQR' value=authorizationRequestQR)
@@ -25,4 +31,27 @@ block layout-content
   script(src="/js/index.js")
 
   script(src="/js/presentation-request.js")
+  script.
+    function testWithCustomWallet() {
+      const customWalletURL = document.getElementById('customWalletURL').value;
+      const originalURL = document.getElementById('authorizationRequestURL').value;
+
+      // Check if custom URL is provided
+      if (customWalletURL.trim() === "") {
+        alert("Please enter a custom wallet URL.");
+        return;
+      }
+
+      // Ensure `openid4vp://cb` exists in the original URL
+      if (!originalURL.includes("openid4vp://cb")) {
+        alert("The original URL is not in the expected format.");
+        return;
+      }
+
+      // Replace `openid4vp://cb` with the user-provided URL
+      const modifiedURL = originalURL.replace("openid4vp://cb", customWalletURL);
+
+      // Redirect to the modified URL
+      window.location.href = modifiedURL;
+    }
   link(rel="stylesheet" href="/styles/scan-qr-verifier.css")
