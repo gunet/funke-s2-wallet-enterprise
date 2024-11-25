@@ -1,35 +1,47 @@
 extends ../layout.pug
+
 block layout-content
 	.container
 		.centered-layout
-			form(action=`/verifier/public/definitions/presentation-request/${presentationDefinitionId}` method='POST')
+			form(
+				action=`/verifier/public/definitions/presentation-request/${presentationDefinitionId}` 
+				method='POST' 
+				class="presentation-form"
+			)
 				.CenteredLayout
-					h2 Select the fields you wish to present
+					h2.title Select the Fields You Wish to Present
+
 					.left-layout
 						.field
-							label(for="purpose") Purpose
-							textarea#purpose(name="purpose")
+							h4.title(for="purpose") Purpose
+							textarea#purpose(name="purpose" placeholder="Enter the purpose of this request")
 
 						.field
-							label Type
-							select#type(name="type")
+							h4.title(for="type") Type
+							select#type(name="type" class="dropdown")
 								option(value="sd-jwt") SD-JWT
 								option(value="mdoc") MDOC
+
 					.attribute-selection
-						label(for="attribute") Attribute
-						select(name="attribute" id="attribute")
-							option(value="") Select an attribute
-							for field in selectableFields
-								option(value=field[1]) #{field[0]} - #{field[1]}
-						.add-button
-							button(type="button" onclick="addAttributeField()") Add Attribute
+						.field
+							h4.title(for="attribute") Select Attributes
+							select(name="attributes" id="attribute" class="dropdown" multiple)
+								// The options will be dynamically updated by JavaScript
 
-					// Container to show selected attributes
-					.selected-attributes(id="selectedAttributes")
+						// Display Selected Attributes Automatically
+						.selected-attributes-container
+							h4.title.selected-attributes-title Selected Attributes
+							ul.selected-attributes-list(id="selectedAttributes")
+								li.empty-placeholder No attributes added yet.
 
-					button(type="submit") Request
+						// Submit Button
+						button.submit-button(type="submit") Submit Request
 
+
+	// Link to external stylesheets
 	link(rel="stylesheet" href="/styles/scan-qr-verifier.css")
 	link(rel="stylesheet" href="/styles/configurable-presentation.css")
+	link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css")
+	// Scripts
 	script(src="/js/index.js")
-	script(src="/js/configurable-presentation.js")
+	script(src="/js/configurable-presentation.js" data-fields=`${JSON.stringify(selectableFields)}`)
