@@ -1,0 +1,35 @@
+.CenteredLayout{
+background-color: transparent;
+}
+
+.content-wrapper{
+	gap:10%;
+}
+.left-section, .right-section{
+	padding: 20px;
+	background-color: white;
+	min-height: 500px;
+	width: 85%;
+}
+
+.right-section{
+	justify-content: flex-start;
+}
+@media (max-width: 768px) {
+	.left-section, .right-section{
+		min-height: auto;
+	}
+
+	#presentation{
+		margin:0;
+		padding: 10px;
+
+	}
+	.section-title{
+		display: none;
+	}
+}
+
+.wallet-label{
+	margin-bottom: 0!important;
+}

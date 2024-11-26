@@ -18,6 +18,10 @@ import { ClaimRecord, PresentationClaims, RelyingPartyState } from "../entities/
 import { generateRandomIdentifier } from "../lib/generateRandomIdentifier";
 import * as z from 'zod';
 import { verifyKbJwt } from "../util/verifyKbJwt";
+import { DeviceSignedDocument } from '@auth0/mdl';
+import * as mdl from '@auth0/mdl';
+import { cborEncode } from "../util/cbor";
+import * as jose from 'jose';
 
 const privateKeyPem = fs.readFileSync(path.join(__dirname, "../../../keys/pem.server.key"), 'utf-8').toString();
 const x5c = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../keys/x5c.server.json")).toString()) as Array<string>;
@@ -203,7 +207,7 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 				throw new Error();
 			}
 			const rp_eph_priv = await importJWK(rpState.rp_eph_priv, 'ECDH-ES');
-			const { plaintext } = await compactDecrypt(ctx.req.body.response, rp_eph_priv);
+			const { protectedHeader, plaintext } = await compactDecrypt(ctx.req.body.response, rp_eph_priv);
 			const payload = JSON.parse(new TextDecoder().decode(plaintext)) as { state: string | undefined, vp_token: string | undefined, presentation_submission: any };
 			if (!payload?.state) {
 				throw new Error("Missing state");
@@ -231,6 +235,8 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 			console.log("Encoding....")
 			rpState.vp_token = base64url.encode(JSON.stringify(payload.vp_token));
 			rpState.date_created = new Date();
+			rpState.apv_jarm_encrypted_response_header = protectedHeader.apv && typeof protectedHeader.apv == 'string' ? protectedHeader.apv as string : null;
+			rpState.apu_jarm_encrypted_response_header = protectedHeader.apu && typeof protectedHeader.apu == 'string' ? protectedHeader.apu as string : null;
 			console.log("Stored rp state = ", rpState)
 			await this.rpStateRepository.save(rpState);
 			ctx.res.send({ redirect_uri: rpState.callback_endpoint + '#response_code=' + rpState.response_code })
@@ -340,6 +346,70 @@ export class OpenidForPresentationsReceivingService implements OpenidForPresenta
 
 				if (!verificationResult.isSignatureValid) {
 					return { error: new Error("SD_JWT_VERIFICATION_FAILURE"), error_description: new Error(`Verification result ${JSON.stringify(verificationResult)}`) };
+				}
+			}
+			else if (desc.format == VerifiableCredentialFormat.MSO_MDOC) {
+				const responseUri = this.configurationService.getConfiguration().redirect_uri;
+				const client_id = rpState.audience;
+				const definition = this.configurationService.getPresentationDefinitions().filter((pd) => pd.id == presentation_submission.definition_id)[0]
+				console.log("Credential to be mdoc parsed = ", vp_token)
+				const b = Buffer.from(vp_token, 'base64url');
+				console.log("Convert to hex = ", Buffer.from(b).toString('hex'));
+				const parsed = mdl.parse(b);
+				const ns = parsed.documents[0].getIssuerNameSpace(parsed.documents[0].issuerSignedNameSpaces[0]);
+				const json: any = {};
+				json[parsed.documents[0].docType] = ns;
+
+				const [document] = parsed.documents as DeviceSignedDocument[];
+				console.log("Dev sig = ", document.deviceSigned.deviceAuth.deviceSignature)
+				
+				if (!rpState.apu_jarm_encrypted_response_header) {
+					throw new Error("Not rpState.apu_jarm_encrypted_response_header is missing");
+				}
+				if (!rpState.apv_jarm_encrypted_response_header) {
+					throw new Error("Not rpState.apv_jarm_encrypted_response_header is missing");
+				}
+
+				const verifier = new mdl.Verifier(config.trustedRootCertificates);
+
+				const getSessionTranscriptBytes = (clId: string, respUri: string, nonce: string, mdocNonce: string) => cborEncode(
+					mdl.DataItem.fromData([
+						null, // DeviceEngagementBytes
+						null, // EReaderKeyBytes
+						[mdocNonce, clId, respUri, nonce], // Handover = OID4VPHandover
+					]),
+				);
+
+				const verifierNonce = base64url.decode(rpState.apv_jarm_encrypted_response_header);
+				console.log("verifierNonce = ", verifierNonce);
+				const receivedMdocNonce = base64url.decode(rpState.apu_jarm_encrypted_response_header);
+				console.log("Received mdoc nonce = ", receivedMdocNonce);
+
+				const encoded = jose.base64url.decode(vp_token);
+				const result = await verifier.verify(encoded, {
+					encodedSessionTranscript: getSessionTranscriptBytes(client_id, responseUri, verifierNonce, receivedMdocNonce),
+				}).then((success) => ({ success })).catch((err) => ({ err }));
+
+				if ('err' in result) {
+					const { err } = result;
+					console.log("Failed to verify the mdoc credential. Cause: ");
+					console.log(err);
+					return { error: new Error("PRESENTATION_RESPONSE:MDOC_VERIFICATION_FAILED"), error_description: new Error("Failed to verify the mdoc credential") };
+				}
+				const fieldNamesWithValues = definition.input_descriptors[0].constraints.fields.map((field: any) => {
+					const values = field.path.map((possiblePath: string) => JSONPath({ path: possiblePath, json: json })[0]);
+					const val = values.filter((v: any) => v != undefined || v != null)[0]; // get first value that is not undefined
+					return val ? { name: (field as any).name as string, value: typeof val == 'object' ? JSON.stringify(val) : val as string } : undefined;
+				});
+				// if (fieldNamesWithValues.includes(undefined)) {
+				// 	return { error: new Error("INSUFFICIENT_CREDENTIALS"), error_description: new Error("Insufficient credentials") };
+				// }
+
+				for (const item of fieldNamesWithValues as Array<{ name: string; value: string } | undefined>) {
+					if (item) { // Check if item is not undefined
+						const { name, value } = item;
+						presentationClaims[desc.id].push({ name, value });
+					}
 				}
 			}
 		}

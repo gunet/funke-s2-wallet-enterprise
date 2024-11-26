@@ -112,7 +112,7 @@ verifierRouter.post('/callback', async (req, res) => {
 })
 
 
-verifierRouter.use('/public/definitions/selectable-presentation-request/:presentation_definition_id', async (req, res) => {
+verifierRouter.use('/public/definitions/configurable-presentation-request/:presentation_definition_id', async (req, res) => {
 	const presentation_definition_id = req.params.presentation_definition_id;
 	if (!presentation_definition_id) {
 		return res.render('error', {
@@ -139,7 +139,7 @@ verifierRouter.use('/public/definitions/selectable-presentation-request/:present
 	});
 
 	console.log("Selectable fields = ", selectableFields)
-	return res.render('verifier/selectable_presentation', {
+	return res.render('verifier/configurable_presentation', {
 		presentationDefinitionId: presentationDefinition.id,
 		selectableFields,
 		lang: req.lang,
@@ -169,7 +169,6 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 
 	const presentation_definition_id = req.params.presentation_definition_id;
 
-
 	if (!presentation_definition_id) {
 		return res.render('error', {
 			msg: "No presentation definition was selected",
@@ -178,7 +177,6 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 			locale: locale[req.lang]
 		});
 	}
-
 
 	const presentationDefinition = JSON.parse(JSON.stringify(verifierConfiguration.getPresentationDefinitions().filter(pd => pd.id == presentation_definition_id)[0])) as any;
 	if (!presentationDefinition) {
@@ -191,24 +189,33 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 	}
 
 	// If there are selected fields from a POST request, update the constraints accordingly
-	if (req.method === "POST" && req.body.fields) {
-		let selectedFieldPaths = req.body.fields;
+	if (req.method === "POST" && req.body.attributes) {
+		let selectedFieldPaths = req.body.attributes;
 		if (!Array.isArray(selectedFieldPaths)) {
 			selectedFieldPaths = [selectedFieldPaths];
 		}
 		const selectedPaths = new Set(selectedFieldPaths);
-		console.log("Selectd paths", selectedPaths);
+
 		// Filter existing paths to keep only those selected by the user and update presentationDefinition
 		const availableFields = presentationDefinition.input_descriptors[0].constraints.fields;
-		console.log("Available fields = ", availableFields)
-		const filteredFields = presentationDefinition.input_descriptors[0].constraints.fields.filter((field: any) =>
+		const filteredFields = availableFields.filter((field: any) =>
 			selectedPaths.has(field.path[0])
 		);
 
 		console.log("filtered fields = ", filteredFields)
 		presentationDefinition.input_descriptors[0].constraints.fields = filteredFields;
+		// Determine the presentation format based on the 'type' (sd-jwt or mdoc) provided by the form
+		const selectedType = req.body.type // Default to sd-jwt if type is not provided
+		if (selectedType === "sd-jwt") {
+			presentationDefinition.input_descriptors[0].id = 'VerifiableId'
+			presentationDefinition.input_descriptors[0].format = { "vc+sd-jwt": { alg: ['ES256'] } };
+		} else if (selectedType === "mdoc") {
+			presentationDefinition.input_descriptors[0].id = 'eu.europa.ec.eudi.pid.1'
+			presentationDefinition.input_descriptors[0].format = { "mso_mdoc": { alg: ['ES256'] } };
+		}
 	}
 
+	console.log('Generated Presentation Definition: ', presentationDefinition);
 	const newSessionId = generateRandomIdentifier(12);
 	addSessionIdCookieToResponse(res, newSessionId); // start session here
 	console.log("call")
