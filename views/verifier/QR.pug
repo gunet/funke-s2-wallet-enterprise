@@ -4,21 +4,28 @@ block layout-content
   .container
     .centered-layout
       form(id="PresentationRequestForm" name="PresentationRequestForm" method="POST")
-        .CenteredLayout
+        .CenteredLayout#presentation
+          h1.main-title Present your VCs
 
-          h1 Scan the QR code
+          .content-wrapper
+            .left-section
+              h2.section-title QR Code
+              img(src=authorizationRequestQR id="qr-image")
+              .qr-url-block
+                p.qr-url(id="qrURLDisplay") #{authorizationRequestURL}
 
-          img(src=authorizationRequestQR id="qr-image")
-					
-          - const modifiedURL = authorizationRequestURL.replace("openid4vp://cb", wwwalletURL)
-          button.Btn.Medium.openwithwalletbutton(type="button" onclick=`window.location.href = '${modifiedURL}';`) Open with wwWallet
-          button.Btn.Medium.openwithwalletbuttonnative(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with a Native Wallet
+            .right-section
+              h2.section-title Wallet Options
+              .buttons-wrapper
+                button.Btn.Medium(type="button" onclick=`window.location.href = '${modifiedURL}';`) Open with wwWallet
+                button.Btn.Medium(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with Native Wallet
 
-           // input and button for custom wallet
-          .custom-wallet-input
-            label(for="customWalletURL") Test with other wallet:
-            input(type="text" id="customWalletURL" name="customWalletURL" placeholder="Enter custom wallet URL")
-            button.Btn.Medium(type="button" onclick="testWithCustomWallet()") Test
+              label.wallet-label(for="customWalletURL") Test with other wallet:
+              .custom-wallet-input-block
+                input(type="text" id="customWalletURL" name="customWalletURL" placeholder="Enter custom wallet URL")
+                button.Btn.Small(type="button" onclick="testWithCustomWallet()") Test
+
+              .custom-wallet-display(id="customWalletURLDisplay" style="display: none;") 
 
           input(type='hidden' name='state' id='state' value=state)
           input(type='hidden' name='authorizationRequestQR' id='authorizationRequestQR' value=authorizationRequestQR)
@@ -29,7 +36,6 @@ block layout-content
 
   link(rel="stylesheet" href="/styles/index.css")
   script(src="/js/index.js")
-
   script(src="/js/presentation-request.js")
   script.
     function testWithCustomWallet() {
@@ -51,7 +57,10 @@ block layout-content
       // Replace `openid4vp://cb` with the user-provided URL
       const modifiedURL = originalURL.replace("openid4vp://cb", customWalletURL);
 
-      // Redirect to the modified URL
-      window.location.href = modifiedURL;
+      // Display the modified URL under the input box
+      const displayContainer = document.getElementById('customWalletURLDisplay');
+      displayContainer.textContent = modifiedURL;
+      displayContainer.style.display = 'block';
+
     }
   link(rel="stylesheet" href="/styles/scan-qr-verifier.css")
