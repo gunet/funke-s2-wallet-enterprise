@@ -17,6 +17,7 @@ block layout-content
             .right-section
               h2.section-title Wallet Options
               .buttons-wrapper
+                - const modifiedURL = authorizationRequestURL.replace("openid4vp://cb", wwwalletURL)
                 button.Btn.Medium(type="button" onclick=`window.location.href = '${modifiedURL}';`) Open with wwWallet
                 button.Btn.Medium(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with Native Wallet
 
