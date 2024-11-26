@@ -20,7 +20,7 @@ block layout-content
                 button.Btn.Medium(type="button" onclick=`window.location.href = '${modifiedURL}';`) Open with wwWallet
                 button.Btn.Medium(type="button" onclick=`window.location.href = '${authorizationRequestURL}';`) Open with Native Wallet
 
-              label.wallet-label(for="customWalletURL") Test with other wallet:
+              h4.wallet-label(for="customWalletURL") Test with other wallet:
               .custom-wallet-input-block
                 input(type="text" id="customWalletURL" name="customWalletURL" placeholder="Enter custom wallet URL")
                 button.Btn.Small(type="button" onclick="testWithCustomWallet()") Test
@@ -64,3 +64,4 @@ block layout-content
 
     }
   link(rel="stylesheet" href="/styles/scan-qr-verifier.css")
+  link(rel="stylesheet" href="/styles/qr.css")
