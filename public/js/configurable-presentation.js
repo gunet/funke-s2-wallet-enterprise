@@ -2,9 +2,36 @@ document.addEventListener("DOMContentLoaded", () => {
 	const typeDropdown = document.getElementById("type");
 	const attributesDropdown = document.getElementById("attribute");
 	const selectedAttributesList = document.querySelector("#selectedAttributes");
-
+	const form = document.querySelector(".presentation-form");
 	// Parse selectableFields passed as a prop to the script tag
 	const selectableFields = JSON.parse(document.querySelector('script[src="/js/configurable-presentation.js"]').dataset.fields);
+	const presentationDefinitionId = document.querySelector('script[src="/js/configurable-presentation.js"]').dataset.presentationId;
+
+	const calculateDescriptorId = () => {
+			const type = typeDropdown.value;
+			if (type === "sd-jwt") {
+					if (presentationDefinitionId === "CustomVerifiableId") {
+							return "VerifiableId";
+					} else if (presentationDefinitionId === "POR") {
+							return "POR";
+					}
+			} else if (type === "mdoc") {
+					if (presentationDefinitionId === "CustomVerifiableId") {
+							return "eu.europa.ec.eudi.pid.1";
+					}
+			}
+			return ""; // Default or empty if no match
+	};
+	const descriptorIdInput = document.getElementById("descriptorId");
+	const updateDescriptorId = () => {
+			descriptorIdInput.value = calculateDescriptorId();
+	};
+
+	// Update descriptorId on type change
+	typeDropdown.addEventListener("change", updateDescriptorId);
+
+	// Initial population based on the default type
+	updateDescriptorId();
 
 	const addVCTAttribute = () => {
 		// Check if "VCT (Credential Type)" is already added

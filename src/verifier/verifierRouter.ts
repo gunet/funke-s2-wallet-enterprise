@@ -207,12 +207,12 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 		// Determine the presentation format based on the 'type' (sd-jwt or mdoc) provided by the form
 		const selectedType = req.body.type // Default to sd-jwt if type is not provided
 		if (selectedType === "sd-jwt") {
-			presentationDefinition.input_descriptors[0].id = 'VerifiableId'
 			presentationDefinition.input_descriptors[0].format = { "vc+sd-jwt": { alg: ['ES256'] } };
 		} else if (selectedType === "mdoc") {
-			presentationDefinition.input_descriptors[0].id = 'eu.europa.ec.eudi.pid.1'
 			presentationDefinition.input_descriptors[0].format = { "mso_mdoc": { alg: ['ES256'] } };
 		}
+		presentationDefinition.input_descriptors[0].id = req.body.descriptorId
+
 	}
 
 	console.log('Generated Presentation Definition: ', presentationDefinition);
