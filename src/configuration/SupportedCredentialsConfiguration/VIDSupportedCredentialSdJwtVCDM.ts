@@ -143,6 +143,13 @@ export class VIDSupportedCredentialSdJwtVCDM implements VCDMSupportedCredentialP
 			issuing_authority: true,
 			issuing_country: true,
 			document_number: true,
+			place_of_birth: true,
+			age_equal_or_over: true,
+			age_birth_year: true,
+			age_in_years: true,
+			birth_family_name: true,
+			nationalities: true,
+			address: true,
 		}
 		const { jws } = await this.getCredentialSigner()
 			.sign(payload, { typ: 'JWT', vctm: this.metadata() }, disclosureFrame);

@@ -36,6 +36,7 @@ th {
 	margin-bottom: 20px;
 	overflow-x: auto;
 	/* Enable horizontal scrolling */
+	max-height: 12em;
 }
 
 .table-container table {
