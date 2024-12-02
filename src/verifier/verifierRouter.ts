@@ -207,10 +207,21 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 		// Determine the presentation format based on the 'type' (sd-jwt or mdoc) provided by the form
 		const selectedType = req.body.type // Default to sd-jwt if type is not provided
 		if (selectedType === "sd-jwt") {
-			presentationDefinition.input_descriptors[0].format = { "vc+sd-jwt": { alg: ['ES256'] } };
+			presentationDefinition.input_descriptors[0].format = {
+				"vc+sd-jwt": {
+					"sd-jwt_alg_values": ["ES256"],
+					"kb-jwt_alg_values": ["ES256"]
+				},
+			};
 		} else if (selectedType === "mdoc") {
-			presentationDefinition.input_descriptors[0].format = { "mso_mdoc": { alg: ['ES256'] } };
+			presentationDefinition.input_descriptors[0].format = {
+				"mso_mdoc": {
+					"sd-jwt_alg_values": ["ES256"],
+					"kb-jwt_alg_values": ["ES256"]
+				},
+			};
 		}
+		presentationDefinition.input_descriptors[0].purpose = req.body.purpose
 		presentationDefinition.input_descriptors[0].id = req.body.descriptorId
 
 	}
