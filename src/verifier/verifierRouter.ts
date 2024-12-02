@@ -221,6 +221,7 @@ verifierRouter.use('/public/definitions/presentation-request/:presentation_defin
 				},
 			};
 		}
+		presentationDefinition.input_descriptors[0].purpose = req.body.purpose
 		presentationDefinition.input_descriptors[0].id = req.body.descriptorId
 
 	}
